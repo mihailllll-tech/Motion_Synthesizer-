@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gesture Music</title>
+  <style>
+    :root {
+      --panel: rgba(12, 14, 20, .72);
+      --text: #fff;
+      --muted: rgba(255,255,255,.72);
+      --accent: #54e5c2;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      color: var(--text);
+      background: #17191d;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    button, input, select { font: inherit; }
+    #camera, #cameraFallback {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+    }
+    #camera { object-fit: cover; }
+    #camera[hidden], #cameraFallback[hidden] { display: none; }
+    #cameraFallback {
+      display: grid; place-items: center; padding: 24px;
+      color: #fff; text-align: center; background: #242830;
+    }
+    .shade {
+      position: fixed; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(0,0,0,.42), transparent 38%, rgba(0,0,0,.18));
+    }
+    .mode-switches {
+      position: fixed; z-index: 2; top: 18px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; gap: 12px;
+    }
+    .mode-card {
+      width: 112px; height: 92px; padding: 8px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+      border: 2px solid rgba(255,255,255,.45); border-radius: 10px;
+      color: #fff; background: rgba(12,14,20,.65);
+      cursor: pointer; backdrop-filter: blur(5px);
+    }
+    .mode-card[aria-pressed="true"] { border-color: var(--accent); background: rgba(12,14,20,.86); }
+    .mode-card img { width: 48px; height: 43px; object-fit: contain; display: block; }
+    .mode-card span { font-size: 13px; font-weight: 700; }
+    .side-controls {
+      position: fixed; z-index: 2; left: 18px; top: 50%;
+      transform: translateY(-50%); width: 210px; padding: 14px;
+      background: var(--panel); border-radius: 8px; backdrop-filter: blur(6px);
+    }
+    .side-controls[hidden] { display: none; }
+    .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    label { color: var(--muted); font-size: 13px; }
+    input, select {
+      width: 100%; min-height: 38px; padding: 7px 9px;
+      color: #fff; background: rgba(0,0,0,.38);
+      border: 1px solid rgba(255,255,255,.35); border-radius: 5px;
+      outline: none;
+    }
+    input:focus-visible, select:focus-visible, button:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    select option { color: #111; }
+    @media (max-width: 520px) {
+      .mode-switches { top: 10px; gap: 8px; }
+      .mode-card { width: 94px; height: 80px; }
+      .mode-card img { width: 40px; height: 35px; }
+      .mode-card span { font-size: 12px; }
+      .side-controls { left: 10px; top: auto; bottom: 14px; transform: none; width: 176px; padding: 11px; }
+    }
+  </style>
+</head>
+<body data-mode="drum">
+  <video id="camera" autoplay playsinline muted hidden aria-hidden="true"></video>
+  <div id="cameraFallback" role="status">
+    <div>
+      <strong>Камера недоступна</strong>
+      <p>Разрешите доступ к камере или откройте страницу через localhost/HTTPS.</p>
+    </div>
+  </div>
+  <div class="shade" aria-hidden="true"></div>
+
+  <nav class="mode-switches" aria-label="Выбор режима">
+    <button class="mode-card" id="drumMode" type="button" aria-pressed="true" aria-label="Выбрать ударные">
+      <img src="drums_clean.png" alt="">
+      <span>Ударные</span>
+    </button>
+    <button class="mode-card" id="synthMode" type="button" aria-pressed="false" aria-label="Выбрать синтезатор">
+      <img src="synth_clean.png" alt="">
+      <span>Синтезатор</span>
+    </button>
+  </nav>
+
+  <aside class="side-controls" id="drumControls" aria-label="Параметры ударных">
+    <div class="field">
+      <label for="bpm">Темп (BPM)</label>
+      <input id="bpm" type="number" min="40" max="240" step="1" value="120">
+    </div>
+    <div class="field">
+      <label for="instrument"></label>
+      <select id="instrument">
+        <option value="kick">Kick</option>
+        <option value="snare">Snare</option>
+        <option value="placeholder1">placeholder1</option>
+        <option value="placeholder2">placeholder2</option>
+      </select>
+    </div>
+  </aside>
+
+  <aside class="side-controls" id="synthControls" aria-label="Параметры синтезатора" hidden>
+    <div class="field">
+      <label for="startNote">Первая нота</label>
+      <select id="startNote">
+        <option>C4</option><option>C#4</option><option>D4</option><option>D#4</option>
+        <option>E4</option><option>F4</option><option>F#4</option><option>G4</option>
+        <option>G#4</option><option>A4</option><option>A#4</option><option>B4</option>
+        <option>C5</option><option>C#5</option><option>D5</option><option>D#5</option>
+        <option>E5</option><option>F5</option><option>F#5</option><option>G5</option>
+        <option>G#5</option><option>A5</option><option>A#5</option><option>B5</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="instrument">Инструмент</label>
+      <select id="instrument">
+        <option value="piano">Piano</option>
+        <option value="synth-lead">Synth Lead</option>
+        <option value="synth-pad">Synth Pad</option>
+        <option value="bass">Bass</option>
+        <option value="strings">Strings</option>
+      </select>
+    </div>
+  </aside>
+
+  <script>
+    (() => {
+      const camera = document.getElementById('camera');
+      const cameraFallback = document.getElementById('cameraFallback');
+      const drumMode = document.getElementById('drumMode');
+      const synthMode = document.getElementById('synthMode');
+      const drumControls = document.getElementById('drumControls');
+      const synthControls = document.getElementById('synthControls');
+      const bpmInput = document.getElementById('bpm');
+      const startNote = document.getElementById('startNote');
+      const instrument = document.getElementById('instrument');
+
+      function setMode(mode) {
+        const isDrum = mode === 'drum';
+        document.body.dataset.mode = mode;
+        drumMode.setAttribute('aria-pressed', String(isDrum));
+        synthMode.setAttribute('aria-pressed', String(!isDrum));
+        drumControls.hidden = !isDrum;
+        synthControls.hidden = isDrum;
+        console.info('[UI] Режим:', mode);
+      }
+
+      drumMode.addEventListener('click', () => setMode('drum'));
+      synthMode.addEventListener('click', () => setMode('synth'));
+
+      function sendToAudioEngine(method, ...args) {
+        const engine = window.audioEngine;
+        if (engine && typeof engine[method] === 'function') {
+          try { return engine[method](...args); }
+          catch (error) { console.error(`[AudioEngine] Ошибка в ${method}():`, error); }
+        } else {
+          console.info(`[AudioEngine stub] ${method}()`, ...args);
+        }
+      }
+
+      function scheduleUiEvent(event) {
+        console.info('[UI → AudioEngine] Событие:', event);
+        const engine = window.audioEngine;
+        if (engine && typeof engine.scheduleEvent === 'function') {
+          try {
+            let result = event;
+            if (typeof engine.quantize === 'function') {
+              const quantized = engine.quantize(event);
+              if (quantized !== undefined) result = quantized;
+            }
+            engine.scheduleEvent(result);
+          } catch (error) {
+            console.error('[AudioEngine] Не удалось передать событие:', error);
+          }
+        } else {
+          console.info('[AudioEngine stub] quantize(event) → scheduleEvent(event)', event);
+        }
+      }
+
+      bpmInput.addEventListener('change', () => {
+        const bpm = Number(bpmInput.value);
+        if (!Number.isFinite(bpm) || bpm < 40 || bpm > 240) {
+          bpmInput.setCustomValidity('Введите BPM от 40 до 240');
+          bpmInput.reportValidity();
+          return;
+        }
+        bpmInput.setCustomValidity('');
+        sendToAudioEngine('setBPM', bpm);
+        console.info('[UI] BPM изменён:', bpm);
+      });
+
+      function sendSynthSettings() {
+        console.info('[UI] Параметры синтезатора:', {
+          startNote: startNote.value,
+          instrument: instrument.value
+        });
+      }
+      startNote.addEventListener('change', sendSynthSettings);
+      instrument.addEventListener('change', sendSynthSettings);
+
+      // Контракт для модуля распознавания жестов:
+      // window.onGesture(1) — ударные; window.onGesture(2) — синтезатор.
+      window.onGesture = function (gestureId) {
+        if (gestureId === 1 || gestureId === '1') setMode('drum');
+        else if (gestureId === 2 || gestureId === '2') setMode('synth');
+        else console.info('[Gesture → UI] Неизвестный ID режима:', gestureId);
+      };
+      window.addEventListener('gesture', event => {
+        const detail = event.detail;
+        window.onGesture(detail && typeof detail === 'object' ? detail.gestureId : detail);
+      });
+
+      // Модуль жестов может передавать интерпретированные данные левой/правой руки сюда.
+      // chordNumber — аккорд левой руки; inversion и dynamics — правая рука.
+      window.onSynthGesture = function ({ chordNumber, inversion, dynamics } = {}) {
+        scheduleUiEvent({
+          type: 'synth-chord',
+          chordNumber,
+          inversion,
+          dynamics,
+          startNote: startNote.value,
+          instrument: instrument.value,
+          timestamp: performance.now()
+        });
+      };
+
+      // Будущий модуль ударных может вызывать это для передачи события в AudioEngine.
+      window.onDrumGesture = function (gestureData = {}) {
+        scheduleUiEvent({
+          type: 'drum',
+          ...gestureData,
+          bpm: Number(bpmInput.value),
+          timestamp: performance.now()
+        });
+      };
+
+      // Для ручной проверки переключения режимов с клавиатуры: 1 и 2.
+      window.addEventListener('keydown', event => {
+        if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+        if (event.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
+        if (event.key === '1') setMode('drum');
+        if (event.key === '2') setMode('synth');
+      });
+
+      async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          cameraFallback.hidden = false;
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          camera.srcObject = stream;
+          camera.hidden = false;
+          cameraFallback.hidden = true;
+          await camera.play();
+          console.info('[Camera] Камера подключена');
+        } catch (error) {
+          camera.hidden = false;
+          cameraFallback.hidden = false;
+          console.warn('[Camera] Камера недоступна или доступ запрещён:', error);
+        }
+      }
+
+      setMode('drum');
+      sendToAudioEngine('setBPM', Number(bpmInput.value));
+      startCamera();
+    })();
+  </script>
+</body>
+</html>
